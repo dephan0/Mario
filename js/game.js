@@ -1,15 +1,31 @@
+// Define CANVAS and CONTEXT
 const canvas = document.getElementById("gameScreen");
 const ctx = canvas.getContext("2d");
 
 // GLOBAL VARIABLES (or constants)
-const CANVAS_WIDTH = 800;
-const CANVAS_HEIGHT = 400;
-const FIXED_X = (CANVAS_WIDTH / 2) - 15; // mario's position on the screen (NOT ON THE MAP)
+const CANVAS_WIDTH = canvas.getAttribute("width");
+const CANVAS_HEIGHT = canvas.getAttribute("height");
+const FIXED_X = (CANVAS_WIDTH / 2) - 15 ; // mario's position on the screen (NOT ON THE MAP)
 
 // Physics
 const gravity = 0.2;
 const runSpeed = 4;
+const jumpSpeed = 8;
 const friction = 0.2;
+
+
+/// DRAW BACKGROUND ///
+function drawBackground(offset) {
+    let bg_img = new Image();
+    bg_img.src = "img/bg.jpg";
+
+    if(offset < FIXED_X) {
+        ctx.drawImage(bg_img, 0, 0);
+    } else {
+        ctx.drawImage(bg_img, 0 - ((offset-FIXED_X) % CANVAS_WIDTH), 0);
+        ctx.drawImage(bg_img, CANVAS_WIDTH - ((offset-FIXED_X) % CANVAS_WIDTH), 0);
+    }
+}
 
 
 /// GROUND ///
@@ -35,7 +51,7 @@ let mario = {
     width : 30,
     height : 50,
     color : "#c62828",
-    x : 0, // mario's X position ON THE MAP
+    x : 200, // mario's X position ON THE MAP
     y : (CANVAS_HEIGHT - ground.absoluteHeight), // mario's position ON THE MAP AND THE SCREEN
     x_velocity : 0,
     y_velocity : 0,
@@ -45,7 +61,11 @@ let mario = {
 
     draw : function() {
         ctx.fillStyle = this.color;
-        ctx.fillRect(FIXED_X, this.y - this.height, this.width, this.height);
+        if(this.x < FIXED_X) {
+            ctx.fillRect(this.x, this.y - this.height, this.width, this.height);
+        } else {
+            ctx.fillRect(FIXED_X, this.y - this.height, this.width, this.height);
+        }
     },
 
 
@@ -85,7 +105,7 @@ let object = {
     width : 50,
     height : 50,
     color : "#000000",
-    x : 600,
+    x : 850,
     y : 250,
 
     draw : function(offset) {
@@ -101,11 +121,11 @@ window.addEventListener("keydown", function move() {
 
         // RIGHT ARROW
         if(this.event.keyCode == 39) {
-            // if mario doesn't collide with objects, advance the X parameter 
+            // if mario doesn't collide with objects, set his X velocity
             if(!mario.doesCollideWith(object)) {
                 mario.x_velocity = runSpeed;
             } 
-            // If it collides but from his right side
+            // If it collides but from his left side
             else if( mario.x >= object.x + object.width - 10 /* 10 for safety */) {
                 mario.x_velocity = runSpeed;
             } 
@@ -118,11 +138,11 @@ window.addEventListener("keydown", function move() {
 
         // LEFT ARROW
         if(this.event.keyCode == 37) {
-            // if mario doesn't collide with objects, advance the X parameter 
+            // if mario doesn't collide with objects, set the X velocity 
             if(!mario.doesCollideWith(object)) {
                 mario.x_velocity = -(runSpeed);
             }
-            // If it collides but from the left side
+            // If it collides but from his right side
             else if(mario.x + mario.width <= object.x + 10 /* 10 for safety */) {
                 mario.x_velocity = -(runSpeed);
             } 
@@ -135,11 +155,12 @@ window.addEventListener("keydown", function move() {
         // UP ARROW    
         if(this.event.keyCode == 38) {
             if(!mario.jumping) {
-                mario.y_velocity = 8;
                 mario.jumping = true;
-            }
+                mario.y_velocity = jumpSpeed;
+            } 
         }
 });
+
 
 function gameLoop() {
     // UPDATE PHYSICS
@@ -148,6 +169,7 @@ function gameLoop() {
     
     // CLEAR THE SCREEN AND DRAW EVERYTHING
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    drawBackground(mario.x ); //  divide the offset by 2, so that the background moves slower
     ground.draw();
     mario.draw();
     object.draw(mario.x);
@@ -157,12 +179,12 @@ function gameLoop() {
     // MARIO ABOVE GROUND
     if(CANVAS_HEIGHT - mario.y > ground.absoluteHeight) {
 
-        // If it reaches (approximately) the minimal velocity in the course of the flight 
-        if(mario.y_velocity <= 0.1   &&   mario.y_velocity >= -0.1)
+        // If it reaches (approximately) the minimal velocity in the course of the flight - it begins to fall
+        if(mario.y_velocity <= 0.5   &&   mario.y_velocity >= -0.05)
         { mario.falling = true; }
 
         
-        // If it hits the ceiling
+        // If it hits the ceiling (the bottom side of the object)
         if(mario.doesCollideWith(object)   &&   (mario.y - mario.height >= object.y - 10)   &&   !mario.falling) {
             mario.y_velocity = 0;
             mario.falling = true;
@@ -173,13 +195,18 @@ function gameLoop() {
             mario.y = object.y - object.height;
             mario.jumping = false;
         } 
+        
+        // If it starts falling from the object 
+        if(!mario.doesCollideWith(object) && !mario.jumping) {
+            mario.jumping = true;
+        }
 
-        // Apply force of gravity to the y_velocity
+        // Apply the force of gravity to the y_velocity
         mario.y_velocity -= gravity;
         
     } 
     
-    // ON THE GROUND
+    // ON THE GROUND 
     if(CANVAS_HEIGHT - mario.y <= ground.absoluteHeight) {
         // Set the y velocity and y parameter back in place (for SAFETY)
         mario.y_velocity = 0;
@@ -189,7 +216,7 @@ function gameLoop() {
     } 
 
     // FRICTION
-    if(!mario.doesCollideWith(object)) {
+    if(!mario.doesCollideWith(object)   ^   mario.y == object.y - object.height) {
 
         (mario.x_velocity > 0 ) ? mario.x_velocity -= friction: mario.x_velocity += friction;
 
@@ -198,15 +225,7 @@ function gameLoop() {
             mario.x_velocity = 0;
         }
     }
-    // If mario collides but only from the bottom (is standing on an object) 
-    else if(mario.y == object.y - object.height) {
-        (mario.x_velocity > 0 ) ? mario.x_velocity -= friction: mario.x_velocity += friction;
-
-        if(mario.x_velocity < 0.25 && mario.x_velocity > -0.25) {
-            // Purely for SAFETY (so that mario doesn't slide when we stop)
-            mario.x_velocity = 0;
-        }
-    } else {
+     else {
         mario.x_velocity = 0;
     }
 
