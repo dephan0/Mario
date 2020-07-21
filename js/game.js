@@ -5,27 +5,17 @@ const ctx = canvas.getContext("2d");
 // GLOBAL VARIABLES (or constants)
 const CANVAS_WIDTH = canvas.getAttribute("width");
 const CANVAS_HEIGHT = canvas.getAttribute("height");
-const FIXED_X = (CANVAS_WIDTH / 2) - 15 ; // mario's position on the screen (NOT ON THE MAP)
+const FIXED_X = (CANVAS_WIDTH / 2) - 15 ; // mario's FIXED position on the screen (NOT ON THE MAP)
+const bg_img = new Image(); // background image
+bg_img.src = "img/bg.jpg";
 
 // Physics
 const gravity = 0.2;
+const friction = 0.2;
 const runSpeed = 4;
 const jumpSpeed = 8;
-const friction = 0.2;
+const bgSpeed = 2; // background scroll speed (less means faster)
 
-
-/// DRAW BACKGROUND ///
-function drawBackground(offset) {
-    let bg_img = new Image();
-    bg_img.src = "img/bg.jpg";
-
-    if(offset < FIXED_X) {
-        ctx.drawImage(bg_img, 0, 0);
-    } else {
-        ctx.drawImage(bg_img, 0 - ((offset-FIXED_X) % CANVAS_WIDTH), 0);
-        ctx.drawImage(bg_img, CANVAS_WIDTH - ((offset-FIXED_X) % CANVAS_WIDTH), 0);
-    }
-}
 
 
 /// GROUND ///
@@ -35,7 +25,7 @@ let ground = {
     grassColor : "#43a047",
     soilHeight : 55,
     soilColor : "#5d4037",
-    absoluteHeight: 70,
+    absoluteHeight: 70, // grassheight+soilheight
     draw : function() {
         ctx.fillStyle = this.grassColor;
         ctx.fillRect(0, CANVAS_HEIGHT - (this.grassHeight + this.soilHeight), CANVAS_WIDTH, this.grassHeight);
@@ -51,7 +41,7 @@ let mario = {
     width : 30,
     height : 50,
     color : "#c62828",
-    x : 200, // mario's X position ON THE MAP
+    x : 150, // mario's X position ON THE MAP
     y : (CANVAS_HEIGHT - ground.absoluteHeight), // mario's position ON THE MAP AND THE SCREEN
     x_velocity : 0,
     y_velocity : 0,
@@ -61,7 +51,8 @@ let mario = {
 
     draw : function() {
         ctx.fillStyle = this.color;
-        if(this.x < FIXED_X) {
+        
+        if(this.x < FIXED_X) { // Mario moves on the screen until it reaches the FIXED_X position
             ctx.fillRect(this.x, this.y - this.height, this.width, this.height);
         } else {
             ctx.fillRect(FIXED_X, this.y - this.height, this.width, this.height);
@@ -96,7 +87,6 @@ let mario = {
         { return true; } 
         else { return false; }
     },
-
 }
 
 
@@ -115,61 +105,114 @@ let object = {
 
 }
 
+/// DRAW BACKGROUND ///
+function drawBackground(offset) {
+    /* 
+    The function will use mario's x position as offset 
+    and the bgSpeed constant to set how fast the background moves. 
+    */
+    
+    if(offset < FIXED_X / bgSpeed) {
+        ctx.drawImage(bg_img, 0, 0);
+    } else {
+        ctx.drawImage(bg_img, 0 - ((offset - FIXED_X/bgSpeed) % CANVAS_WIDTH), 0);
+        ctx.drawImage(bg_img, CANVAS_WIDTH - ((offset - FIXED_X/bgSpeed) % CANVAS_WIDTH), 0);
+    }
+}
 
 /// CONTROLLER ///
-window.addEventListener("keydown", function move() {
 
-        // RIGHT ARROW
-        if(this.event.keyCode == 39) {
-            // if mario doesn't collide with objects, set his X velocity
-            if(!mario.doesCollideWith(object)) {
-                mario.x_velocity = runSpeed;
-            } 
-            // If it collides but from his left side
-            else if( mario.x >= object.x + object.width - 10 /* 10 for safety */) {
-                mario.x_velocity = runSpeed;
-            } 
-            // If it collides but is on top of an object
-            else if(mario.y == object.y - object.height) {
-                mario.x_velocity = runSpeed;
-            }
-            
-        }
+let arrows = [false, false, false]; // current state of the keys (false=unpressed)
 
-        // LEFT ARROW
-        if(this.event.keyCode == 37) {
-            // if mario doesn't collide with objects, set the X velocity 
-            if(!mario.doesCollideWith(object)) {
-                mario.x_velocity = -(runSpeed);
-            }
-            // If it collides but from his right side
-            else if(mario.x + mario.width <= object.x + 10 /* 10 for safety */) {
-                mario.x_velocity = -(runSpeed);
-            } 
-            // If it collides but is on top of an object
-            else if(mario.y == object.y - object.height) {
-                mario.x_velocity = -(runSpeed);
-            }
-        }   
+// Detect a keypress and set the array element (assigned to a certain key) to true
+window.addEventListener("keydown", function press() {
 
-        // UP ARROW    
-        if(this.event.keyCode == 38) {
-            if(!mario.jumping) {
-                mario.jumping = true;
-                mario.y_velocity = jumpSpeed;
-            } 
-        }
+    // LEFT ARROW (index no. 0 in array)
+    if(this.event.keyCode == 37) {
+        arrows[0] = true;
+    }   
+    // UP ARROW (index no. 1 in array)
+    if(this.event.keyCode == 38) {
+        arrows[1] = true;
+    }
+    // RIGHT ARROW (index no. 2 in array)
+    if(this.event.keyCode == 39) {
+        arrows[2] = true;
+    }
 });
 
+// Same thing but it detects a key-lift  
+window.addEventListener("keyup", function unpress() {
+    // LEFT ARROW (index no. 0 in array)
+    if(this.event.keyCode == 37) {
+        arrows[0] = false;
+    }   
+    // UP ARROW (index no. 1 in array)
+    if(this.event.keyCode == 38) {
+        arrows[1] = false;
+    }
+    // RIGHT ARROW (index no. 2 in array)
+    if(this.event.keyCode == 39) {
+        arrows[2] = false;
+    }
+});
+
+//  Perfrom a certain action for a certain key
+function arrowAction() {
+
+    // LEFT arrow (index no.0 in array)
+    if(arrows[0]) {
+        // if mario doesn't collide with objects, set the X velocity 
+        if(!mario.doesCollideWith(object)) {
+            mario.x_velocity = -(runSpeed);
+        }
+        // If it collides but from his right side
+        else if(mario.x + mario.width <= object.x) {
+            mario.x_velocity = -(runSpeed);
+        } 
+        // If it collides but is on top of an object
+        else if(mario.y == object.y - object.height) {
+            mario.x_velocity = -(runSpeed);
+        }
+    }   
+
+    // UP arrow (index no.1 in array)
+    if(arrows[1]) {
+        if(!mario.jumping) {
+            mario.jumping = true;
+            mario.y_velocity = jumpSpeed;
+        } 
+    }
+
+    // RIGHT arrow (index no.2 in array)
+    if(arrows[2]) {
+        // if mario doesn't collide with objects, set his X velocity
+        if(!mario.doesCollideWith(object)) {
+            mario.x_velocity = runSpeed;
+        } 
+        // If it collides but from his left side
+        else if(mario.x >= object.x + object.width) {
+            mario.x_velocity = runSpeed;
+        } 
+        // If it collides but is on top of an object
+        else if(mario.y == object.y - object.height) {
+            mario.x_velocity = runSpeed;
+        }
+    }
+    
+}
 
 function gameLoop() {
+    // Get the corresponding action from the currently pressed keys
+    arrowAction();
+
     // UPDATE PHYSICS
     mario.x += mario.x_velocity;
     mario.y -= mario.y_velocity;
     
     // CLEAR THE SCREEN AND DRAW EVERYTHING
     ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    drawBackground(mario.x ); //  divide the offset by 2, so that the background moves slower
+    drawBackground(mario.x/2); //  divide the offset by 2, so that the background moves slower
     ground.draw();
     mario.draw();
     object.draw(mario.x);
@@ -224,8 +267,7 @@ function gameLoop() {
             // Purely for SAFETY (so that mario doesn't slide when we stop)
             mario.x_velocity = 0;
         }
-    }
-     else {
+    } else {
         mario.x_velocity = 0;
     }
 
